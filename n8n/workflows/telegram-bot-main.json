@@ -1,0 +1,291 @@
+{
+  "name": "Telegram Bot - Main Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "webhook-telegram",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "telegram-grooming-bot",
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM clients WHERE telegram_id = {{ $json.message.from.id }}",
+        "additionalFields": {}
+      },
+      "id": "check-user",
+      "name": "Check User Exists",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "2",
+          "name": "PostgreSQL Grooming DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "equal",
+              "value2": "0"
+            }
+          ]
+        }
+      },
+      "id": "is-new-user",
+      "name": "Is New User?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "command",
+              "value": "={{ $json.message.text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-command",
+      "name": "Extract Command",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.command }}",
+                    "operation": "startsWith",
+                    "value2": "/start"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "start"
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.command }}",
+                    "operation": "startsWith",
+                    "value2": "/book"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "book"
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.command }}",
+                    "operation": "startsWith",
+                    "value2": "/services"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "services"
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.command }}",
+                    "operation": "startsWith",
+                    "value2": "/myappointments"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "appointments"
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.command }}",
+                    "operation": "startsWith",
+                    "value2": "/addpet"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "addpet"
+            },
+            {
+              "conditions": {
+                "string": [
+                  {
+                    "value1": "={{ $json.command }}",
+                    "operation": "startsWith",
+                    "value2": "/help"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "help"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "route-command",
+      "name": "Route Command",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "🐾 Добро пожаловать в Груминг Салон!\\n\\nЯ помогу вам записаться на процедуры для вашего питомца.\\n\\nДоступные команды:\\n/book - Записаться на процедуру\\n/services - Наши услуги\\n/addpet - Добавить питомца\\n/myappointments - Мои записи\\n/help - Помощь",
+        "additionalFields": {}
+      },
+      "id": "send-welcome",
+      "name": "Send Welcome",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1250, 100],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO clients (telegram_id, username, first_name, last_name) VALUES ({{ $json.message.from.id }}, '{{ $json.message.from.username }}', '{{ $json.message.from.first_name }}', '{{ $json.message.from.last_name }}') ON CONFLICT (telegram_id) DO NOTHING",
+        "additionalFields": {}
+      },
+      "id": "create-user",
+      "name": "Create User",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [850, 400],
+      "credentials": {
+        "postgres": {
+          "id": "2",
+          "name": "PostgreSQL Grooming DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM services WHERE is_active = true ORDER BY id",
+        "additionalFields": {}
+      },
+      "id": "get-services",
+      "name": "Get Services",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json[0].message.chat.id }}",
+        "text": "📋 Наши услуги:\\n\\n{{ $json.map((s, i) => `${i + 1}. ${s.name} - ${s.price}₽ (${s.duration} мин)\\n   ${s.description}`).join('\\n\\n') }}",
+        "additionalFields": {}
+      },
+      "id": "send-services",
+      "name": "Send Services",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1450, 200],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "ℹ️ Помощь:\\n\\n/start - Начало работы\\n/book - Записаться на процедуру\\n/services - Список услуг\\n/addpet - Добавить питомца\\n/myappointments - Мои записи\\n/cancel - Отменить запись\\n\\nПо всем вопросам обращайтесь:\\n📞 {{ $env.SALON_PHONE }}",
+        "additionalFields": {}
+      },
+      "id": "send-help",
+      "name": "Send Help",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1250, 500],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram Bot API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Check User Exists", "type": "main", "index": 0 }]]
+    },
+    "Check User Exists": {
+      "main": [[{ "node": "Is New User?", "type": "main", "index": 0 }]]
+    },
+    "Is New User?": {
+      "main": [
+        [{ "node": "Create User", "type": "main", "index": 0 }],
+        [{ "node": "Extract Command", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create User": {
+      "main": [[{ "node": "Extract Command", "type": "main", "index": 0 }]]
+    },
+    "Extract Command": {
+      "main": [[{ "node": "Route Command", "type": "main", "index": 0 }]]
+    },
+    "Route Command": {
+      "main": [
+        [{ "node": "Send Welcome", "type": "main", "index": 0 }],
+        [],
+        [{ "node": "Get Services", "type": "main", "index": 0 }],
+        [],
+        [],
+        [{ "node": "Send Help", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Services": {
+      "main": [[{ "node": "Send Services", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "timezone": "Europe/Moscow"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

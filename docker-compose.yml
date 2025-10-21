@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: grooming_db
+    environment:
+      POSTGRES_USER: grooming_user
+      POSTGRES_PASSWORD: grooming_pass
+      POSTGRES_DB: grooming_salon
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - grooming_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grooming_user -d grooming_salon"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # N8N - автоматизация workflow
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: grooming_n8n
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=grooming_salon
+      - DB_POSTGRESDB_USER=grooming_user
+      - DB_POSTGRESDB_PASSWORD=grooming_pass
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=admin123
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=Europe/Moscow
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - grooming_network
+    restart: unless-stopped
+
+  # Redis для кэширования и очередей
+  redis:
+    image: redis:7-alpine
+    container_name: grooming_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - grooming_network
+    restart: unless-stopped
+
+  # PgAdmin для управления базой данных (опционально)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: grooming_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@grooming.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - grooming_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  n8n_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  grooming_network:
+    driver: bridge

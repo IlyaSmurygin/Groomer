@@ -7,10 +7,27 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
 dist
 dist-ssr
 *.local
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+database/backups/*
+!database/backups/.gitkeep
+
+# Docker
+docker-compose.override.yml
+.docker/
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +39,21 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Backups
+backups/*
+!backups/.gitkeep
+*.backup
+*.bak
+
+# N8N data (если запускаете локально без Docker)
+.n8n/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
