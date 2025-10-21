@@ -7,6 +7,7 @@
           "message"
         ]
       },
+      "id": "c1a2b3c4-d5e6-f7g8-h9i0-j1k2l3m4n5o6",
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.1,
@@ -21,6 +22,7 @@
         "query": "=SELECT * FROM clients WHERE telegram_id = {{ $json.message.from.id }}",
         "options": {}
       },
+      "id": "a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6",
       "name": "Check User Exists",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
@@ -39,7 +41,7 @@
           },
           "conditions": [
             {
-              "id": "1",
+              "id": "condition1",
               "leftValue": "={{ $json.length }}",
               "rightValue": "0",
               "operator": {
@@ -52,6 +54,7 @@
         },
         "options": {}
       },
+      "id": "b2c3d4e5-f6g7-h8i9-j0k1-l2m3n4o5p6q7",
       "name": "Is New User?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
@@ -63,49 +66,29 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=INSERT INTO clients (telegram_id, username, first_name, last_name)\nVALUES (\n  {{ $json.message.from.id }},\n  '{{ $json.message.from.username }}',\n  '{{ $json.message.from.first_name }}',\n  '{{ $json.message.from.last_name }}'\n)\nON CONFLICT (telegram_id) DO NOTHING",
+        "query": "=INSERT INTO clients (telegram_id, username, first_name, last_name)\nVALUES (\n  {{ $json.message.from.id }},\n  '{{ $json.message.from.username || '' }}',\n  '{{ $json.message.from.first_name || '' }}',\n  '{{ $json.message.from.last_name || '' }}'\n)\nON CONFLICT (telegram_id) DO NOTHING\nRETURNING *",
         "options": {}
       },
+      "id": "c3d4e5f6-g7h8-i9j0-k1l2-m3n4o5p6q7r8",
       "name": "Create User",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
       "position": [
         900,
-        400
+        200
       ]
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "1",
-              "name": "command",
-              "value": "={{ $json.message.text }}",
-              "type": "string"
-            },
-            {
-              "id": "2",
-              "name": "chatId",
-              "value": "={{ $json.message.chat.id }}",
-              "type": "number"
-            },
-            {
-              "id": "3",
-              "name": "userId",
-              "value": "={{ $json.message.from.id }}",
-              "type": "number"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Извлекаем данные из сообщения Telegram\nconst message = $input.first().json.message;\n\nreturn {\n  command: message.text || '',\n  chatId: message.chat.id,\n  userId: message.from.id,\n  username: message.from.username || '',\n  firstName: message.from.first_name || '',\n  lastName: message.from.last_name || ''\n};"
       },
-      "name": "Extract Data",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
+      "id": "d4e5f6g7-h8i9-j0k1-l2m3-n4o5p6q7r8s9",
+      "name": "Extract Message Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        900,
-        200
+        1120,
+        300
       ]
     },
     {
@@ -121,6 +104,7 @@
                 },
                 "conditions": [
                   {
+                    "id": "cond1",
                     "leftValue": "={{ $json.command }}",
                     "rightValue": "/start",
                     "operator": {
@@ -143,6 +127,7 @@
                 },
                 "conditions": [
                   {
+                    "id": "cond2",
                     "leftValue": "={{ $json.command }}",
                     "rightValue": "/services",
                     "operator": {
@@ -165,6 +150,7 @@
                 },
                 "conditions": [
                   {
+                    "id": "cond3",
                     "leftValue": "={{ $json.command }}",
                     "rightValue": "/help",
                     "operator": {
@@ -180,70 +166,109 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "fallbackOutput": "extra"
+        }
       },
+      "id": "e5f6g7h8-i9j0-k1l2-m3n4-o5p6q7r8s9t0",
       "name": "Route Command",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        1120,
-        200
+        1340,
+        300
       ]
     },
     {
       "parameters": {
         "chatId": "={{ $json.chatId }}",
-        "text": "=🐾 Добро пожаловать в Груминг Салон!\n\nЯ помогу вам записаться на процедуры для вашего питомца.\n\nДоступные команды:\n/services - Наши услуги\n/help - Помощь\n\nДля записи используйте бота напрямую (реализовано в bot/index.js)",
+        "text": "=🐾 Добро пожаловать в {{ $env.SALON_NAME || 'Груминг Салон' }}!\n\nЯ помогу вам записаться на процедуры для вашего питомца.\n\n📋 Доступные команды:\n/services - Наши услуги\n/help - Помощь\n\n💡 Для полноценной записи используйте бота напрямую (функции реализованы в bot/index.js)\n\nДля начала работы посмотрите наши услуги командой /services",
         "additionalFields": {}
       },
-      "name": "Send Welcome",
+      "id": "f6g7h8i9-j0k1-l2m3-n4o5-p6q7r8s9t0u1",
+      "name": "Send Welcome Message",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1340,
-        100
+        1560,
+        180
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=SELECT * FROM services WHERE is_active = true ORDER BY id",
+        "query": "=SELECT id, name, description, duration, price, pet_types\nFROM services \nWHERE is_active = true \nORDER BY id",
         "options": {}
       },
-      "name": "Get Services",
+      "id": "g7h8i9j0-k1l2-m3n4-o5p6-q7r8s9t0u1v2",
+      "name": "Get Services List",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
       "position": [
-        1340,
-        250
+        1560,
+        300
       ]
     },
     {
       "parameters": {
-        "chatId": "={{ $('Extract Data').item.json.chatId }}",
-        "text": "=📋 Наши услуги:\n\n{{ $json.map((s, i) => `${i + 1}. ${s.name} - ${s.price}₽ (${s.duration} мин)\\n   ${s.description}`).join('\\n\\n') }}\n\nДля записи напишите @{{ $env.TELEGRAM_BOT_USERNAME }} или используйте команду /book",
-        "additionalFields": {}
+        "jsCode": "// Форматируем список услуг для отправки\nconst services = $input.all();\nconst chatId = $('Extract Message Data').first().json.chatId;\n\nif (services.length === 0) {\n  return {\n    chatId: chatId,\n    text: '❌ Услуги временно недоступны. Попробуйте позже.'\n  };\n}\n\nlet message = '📋 Наши услуги:\\n\\n';\n\nservices.forEach((item, index) => {\n  const service = item.json;\n  message += `${index + 1}. *${service.name}*\\n`;\n  message += `   ${service.description}\\n`;\n  message += `   💰 Стоимость: ${service.price} ₽\\n`;\n  message += `   ⏱️ Длительность: ${service.duration} мин\\n\\n`;\n});\n\nmessage += '\\n📞 Для записи свяжитесь с нами:\\n';\nmessage += `Телефон: ${process.env.SALON_PHONE || '+7 (999) 123-45-67'}\\n`;\nmessage += `Адрес: ${process.env.SALON_ADDRESS || 'см. описание бота'}`;\n\nreturn {\n  chatId: chatId,\n  text: message,\n  parseMode: 'Markdown'\n};"
       },
-      "name": "Send Services",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "id": "h8i9j0k1-l2m3-n4o5-p6q7-r8s9t0u1v2w3",
+      "name": "Format Services Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        1560,
-        250
+        1780,
+        300
       ]
     },
     {
       "parameters": {
         "chatId": "={{ $json.chatId }}",
-        "text": "=ℹ️ Помощь:\n\n/start - Начало работы\n/services - Список услуг\n\nКонтакты:\n📞 Телефон: {{ $env.SALON_PHONE || '+7 (999) 123-45-67' }}\n📍 Адрес: {{ $env.SALON_ADDRESS || 'см. описание бота' }}\n\n⏰ Рабочие часы: {{ $env.WORKING_HOURS_START || '09:00' }} - {{ $env.WORKING_HOURS_END || '19:00' }}",
-        "additionalFields": {}
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "={{ $json.parseMode || 'Markdown' }}"
+        }
       },
-      "name": "Send Help",
+      "id": "i9j0k1l2-m3n4-o5p6-q7r8-s9t0u1v2w3x4",
+      "name": "Send Services List",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1340,
-        400
+        2000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=ℹ️ *Помощь по использованию бота*\\n\\n📋 Доступные команды:\\n/start - Начало работы\\n/services - Список услуг\\n/help - Эта справка\\n\\n📞 *Контакты:*\\nТелефон: {{ $env.SALON_PHONE || '+7 (999) 123-45-67' }}\\nАдрес: {{ $env.SALON_ADDRESS || 'Москва' }}\\n\\n⏰ *Рабочие часы:*\\n{{ $env.WORKING_HOURS_START || '09:00' }} - {{ $env.WORKING_HOURS_END || '19:00' }}\\n\\n💡 *Как записаться:*\\nДля записи на процедуры используйте команды бота или свяжитесь с нами по телефону.",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "j0k1l2m3-n4o5-p6q7-r8s9-t0u1v2w3x4y5",
+      "name": "Send Help Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1560,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=❓ Неизвестная команда: {{ $json.command }}\\n\\nИспользуйте /help для списка доступных команд.",
+        "additionalFields": {}
+      },
+      "id": "k1l2m3n4-o5p6-q7r8-s9t0-u1v2w3x4y5z6",
+      "name": "Send Unknown Command",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1560,
+        540
       ]
     }
   ],
@@ -281,7 +306,7 @@
         ],
         [
           {
-            "node": "Extract Data",
+            "node": "Extract Message Data",
             "type": "main",
             "index": 0
           }
@@ -292,14 +317,14 @@
       "main": [
         [
           {
-            "node": "Extract Data",
+            "node": "Extract Message Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract Data": {
+    "Extract Message Data": {
       "main": [
         [
           {
@@ -314,32 +339,50 @@
       "main": [
         [
           {
-            "node": "Send Welcome",
+            "node": "Send Welcome Message",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Get Services",
+            "node": "Get Services List",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Send Help",
+            "node": "Send Help Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Unknown Command",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get Services": {
+    "Get Services List": {
       "main": [
         [
           {
-            "node": "Send Services",
+            "node": "Format Services Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Services Message": {
+      "main": [
+        [
+          {
+            "node": "Send Services List",
             "type": "main",
             "index": 0
           }
@@ -354,6 +397,6 @@
   "staticData": null,
   "tags": [],
   "triggerCount": 0,
-  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "updatedAt": "2024-01-15T12:00:00.000Z",
   "versionId": ""
 }

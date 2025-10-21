@@ -12,6 +12,7 @@
           ]
         }
       },
+      "id": "cron-trigger-id-001",
       "name": "Daily at 20:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
@@ -26,51 +27,38 @@
         "query": "=SELECT \n  (SELECT COUNT(*) FROM clients) as total_clients,\n  (SELECT COUNT(*) FROM pets) as total_pets,\n  (SELECT COUNT(*) FROM appointments WHERE status = 'scheduled' AND appointment_date >= CURRENT_DATE) as upcoming_appointments,\n  (SELECT COUNT(*) FROM appointments WHERE status = 'completed' AND appointment_date = CURRENT_DATE) as today_completed,\n  (SELECT COUNT(*) FROM appointments WHERE appointment_date = CURRENT_DATE + 1 AND status = 'scheduled') as tomorrow_scheduled,\n  (SELECT COALESCE(SUM(s.price), 0) FROM appointments a JOIN services s ON a.service_id = s.id WHERE a.status = 'completed' AND a.appointment_date >= DATE_TRUNC('month', CURRENT_DATE)) as month_revenue",
         "options": {}
       },
-      "name": "Get Statistics",
+      "id": "get-stats-id-002",
+      "name": "Get General Statistics",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
       "position": [
         460,
-        300
+        240
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=SELECT \n  a.appointment_date,\n  a.appointment_time,\n  c.first_name || ' ' || COALESCE(c.last_name, '') as client_name,\n  c.phone,\n  p.name as pet_name,\n  s.name as service_name\nFROM appointments a\nJOIN clients c ON a.client_id = c.id\nJOIN pets p ON a.pet_id = p.id\nJOIN services s ON a.service_id = s.id\nWHERE a.appointment_date = CURRENT_DATE + 1\n  AND a.status = 'scheduled'\nORDER BY a.appointment_time",
+        "query": "=SELECT \n  a.appointment_date,\n  a.appointment_time,\n  c.first_name,\n  c.last_name,\n  c.phone,\n  p.name as pet_name,\n  p.breed as pet_breed,\n  s.name as service_name,\n  s.price\nFROM appointments a\nJOIN clients c ON a.client_id = c.id\nJOIN pets p ON a.pet_id = p.id\nJOIN services s ON a.service_id = s.id\nWHERE a.appointment_date = CURRENT_DATE + 1\n  AND a.status = 'scheduled'\nORDER BY a.appointment_time",
         "options": {}
       },
+      "id": "get-tomorrow-id-003",
       "name": "Get Tomorrow Appointments",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
       "position": [
         460,
-        450
+        360
       ]
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "1",
-              "name": "stats",
-              "value": "={{ $('Get Statistics').item.json }}",
-              "type": "object"
-            },
-            {
-              "id": "2",
-              "name": "appointments",
-              "value": "={{ $json }}",
-              "type": "array"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Объединяем статистику и записи\nconst stats = $('Get General Statistics').first().json;\nconst appointments = $('Get Tomorrow Appointments').all().map(item => item.json);\n\nreturn {\n  stats: stats,\n  appointments: appointments\n};"
       },
+      "id": "merge-data-id-004",
       "name": "Merge Data",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         680,
         300
@@ -78,21 +66,12 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "1",
-              "name": "message",
-              "value": "=📊 Ежедневная статистика\n\n👥 Всего клиентов: {{ $json.stats.total_clients }}\n🐾 Всего питомцев: {{ $json.stats.total_pets }}\n📅 Предстоящих записей: {{ $json.stats.upcoming_appointments }}\n✅ Выполнено сегодня: {{ $json.stats.today_completed }}\n💰 Доход за месяц: {{ $json.stats.month_revenue }} ₽\n\n📆 Записи на завтра ({{ $json.stats.tomorrow_scheduled }}):\n{{ $json.appointments.length > 0 ? $json.appointments.map((apt, i) => `${i + 1}. ${apt.appointment_time} - ${apt.client_name}\\n   🐾 ${apt.pet_name}, ${apt.service_name}\\n   📞 ${apt.phone}`).join('\\n\\n') : 'Записей нет' }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Форматируем сообщение со статистикой\nconst data = $input.first().json;\nconst stats = data.stats;\nconst appointments = data.appointments;\n\n// Форматируем дату завтра\nconst tomorrow = new Date();\ntomorrow.setDate(tomorrow.getDate() + 1);\nconst tomorrowStr = tomorrow.toLocaleDateString('ru-RU', {\n  weekday: 'long',\n  day: '2-digit',\n  month: 'long'\n});\n\nlet message = `📊 *Ежедневная статистика*\\n\\n`;\nmessage += `👥 Всего клиентов: ${stats.total_clients}\\n`;\nmessage += `🐾 Всего питомцев: ${stats.total_pets}\\n`;\nmessage += `📅 Предстоящих записей: ${stats.upcoming_appointments}\\n`;\nmessage += `✅ Выполнено сегодня: ${stats.today_completed}\\n`;\nmessage += `💰 Доход за месяц: ${stats.month_revenue} ₽\\n\\n`;\n\nmessage += `📆 *Записи на завтра (${tomorrowStr})*\\n`;\nmessage += `_Всего: ${stats.tomorrow_scheduled}_\\n\\n`;\n\nif (appointments.length === 0) {\n  message += '✨ Записей нет';\n} else {\n  appointments.forEach((apt, index) => {\n    const clientName = apt.last_name ? \n      `${apt.first_name} ${apt.last_name}` : \n      apt.first_name;\n    \n    message += `${index + 1}. *${apt.appointment_time}* - ${clientName}\\n`;\n    message += `   🐾 ${apt.pet_name} (${apt.pet_breed})\\n`;\n    message += `   ✂️ ${apt.service_name} - ${apt.price} ₽\\n`;\n    message += `   📞 ${apt.phone}\\n\\n`;\n  });\n}\n\nreturn {\n  message: message,\n  adminId: process.env.TELEGRAM_ADMIN_ID\n};"
       },
-      "name": "Format Message",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.3,
+      "id": "format-message-id-005",
+      "name": "Format Statistics Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         900,
         300
@@ -100,10 +79,13 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_ADMIN_ID }}",
+        "chatId": "={{ $json.adminId }}",
         "text": "={{ $json.message }}",
-        "additionalFields": {}
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
       },
+      "id": "send-to-admin-id-006",
       "name": "Send to Admin",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
@@ -118,12 +100,23 @@
       "main": [
         [
           {
-            "node": "Get Statistics",
+            "node": "Get General Statistics",
             "type": "main",
             "index": 0
           },
           {
             "node": "Get Tomorrow Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get General Statistics": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
             "type": "main",
             "index": 0
           }
@@ -145,14 +138,14 @@
       "main": [
         [
           {
-            "node": "Format Message",
+            "node": "Format Statistics Message",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Format Message": {
+    "Format Statistics Message": {
       "main": [
         [
           {
@@ -171,6 +164,6 @@
   "staticData": null,
   "tags": [],
   "triggerCount": 0,
-  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "updatedAt": "2024-01-15T12:00:00.000Z",
   "versionId": ""
 }
