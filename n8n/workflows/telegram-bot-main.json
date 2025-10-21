@@ -2,73 +2,111 @@
   "name": "Telegram Bot - Main Handler",
   "nodes": [
     {
-      "parameters": {},
-      "id": "webhook-telegram",
+      "parameters": {
+        "updates": [
+          "message"
+        ]
+      },
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
-      "typeVersion": 1,
-      "position": [250, 300],
-      "webhookId": "telegram-grooming-bot",
-      "credentials": {
-        "telegramApi": {
-          "id": "1",
-          "name": "Telegram Bot API"
-        }
-      }
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT * FROM clients WHERE telegram_id = {{ $json.message.from.id }}",
-        "additionalFields": {}
+        "query": "=SELECT * FROM clients WHERE telegram_id = {{ $json.message.from.id }}",
+        "options": {}
       },
-      "id": "check-user",
       "name": "Check User Exists",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 1,
-      "position": [450, 300],
-      "credentials": {
-        "postgres": {
-          "id": "2",
-          "name": "PostgreSQL Grooming DB"
-        }
-      }
+      "typeVersion": 2.4,
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "string": [
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
             {
-              "value1": "={{ $json.length }}",
-              "operation": "equal",
-              "value2": "0"
+              "id": "1",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
             }
-          ]
-        }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
-      "id": "is-new-user",
       "name": "Is New User?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [650, 300]
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "operation": "executeQuery",
+        "query": "=INSERT INTO clients (telegram_id, username, first_name, last_name)\nVALUES (\n  {{ $json.message.from.id }},\n  '{{ $json.message.from.username }}',\n  '{{ $json.message.from.first_name }}',\n  '{{ $json.message.from.last_name }}'\n)\nON CONFLICT (telegram_id) DO NOTHING",
+        "options": {}
+      },
+      "name": "Create User",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
             {
+              "id": "1",
               "name": "command",
-              "value": "={{ $json.message.text }}"
+              "value": "={{ $json.message.text }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "chatId",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "number"
+            },
+            {
+              "id": "3",
+              "name": "userId",
+              "value": "={{ $json.message.from.id }}",
+              "type": "number"
             }
           ]
         },
         "options": {}
       },
-      "id": "extract-command",
-      "name": "Extract Command",
+      "name": "Extract Data",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
-      "position": [850, 200]
+      "typeVersion": 3.3,
+      "position": [
+        900,
+        200
+      ]
     },
     {
       "parameters": {
@@ -76,78 +114,66 @@
           "values": [
             {
               "conditions": {
-                "string": [
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
                   {
-                    "value1": "={{ $json.command }}",
-                    "operation": "startsWith",
-                    "value2": "/start"
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "/start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
                   }
-                ]
+                ],
+                "combinator": "and"
               },
               "renameOutput": true,
               "outputKey": "start"
             },
             {
               "conditions": {
-                "string": [
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
                   {
-                    "value1": "={{ $json.command }}",
-                    "operation": "startsWith",
-                    "value2": "/book"
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "/services",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
                   }
-                ]
-              },
-              "renameOutput": true,
-              "outputKey": "book"
-            },
-            {
-              "conditions": {
-                "string": [
-                  {
-                    "value1": "={{ $json.command }}",
-                    "operation": "startsWith",
-                    "value2": "/services"
-                  }
-                ]
+                ],
+                "combinator": "and"
               },
               "renameOutput": true,
               "outputKey": "services"
             },
             {
               "conditions": {
-                "string": [
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
                   {
-                    "value1": "={{ $json.command }}",
-                    "operation": "startsWith",
-                    "value2": "/myappointments"
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "/help",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
                   }
-                ]
-              },
-              "renameOutput": true,
-              "outputKey": "appointments"
-            },
-            {
-              "conditions": {
-                "string": [
-                  {
-                    "value1": "={{ $json.command }}",
-                    "operation": "startsWith",
-                    "value2": "/addpet"
-                  }
-                ]
-              },
-              "renameOutput": true,
-              "outputKey": "addpet"
-            },
-            {
-              "conditions": {
-                "string": [
-                  {
-                    "value1": "={{ $json.command }}",
-                    "operation": "startsWith",
-                    "value2": "/help"
-                  }
-                ]
+                ],
+                "combinator": "and"
               },
               "renameOutput": true,
               "outputKey": "help"
@@ -156,136 +182,178 @@
         },
         "options": {}
       },
-      "id": "route-command",
       "name": "Route Command",
       "type": "n8n-nodes-base.switch",
-      "typeVersion": 1,
-      "position": [1050, 200]
+      "typeVersion": 3,
+      "position": [
+        1120,
+        200
+      ]
     },
     {
       "parameters": {
-        "chatId": "={{ $json.message.chat.id }}",
-        "text": "🐾 Добро пожаловать в Груминг Салон!\\n\\nЯ помогу вам записаться на процедуры для вашего питомца.\\n\\nДоступные команды:\\n/book - Записаться на процедуру\\n/services - Наши услуги\\n/addpet - Добавить питомца\\n/myappointments - Мои записи\\n/help - Помощь",
+        "chatId": "={{ $json.chatId }}",
+        "text": "=🐾 Добро пожаловать в Груминг Салон!\n\nЯ помогу вам записаться на процедуры для вашего питомца.\n\nДоступные команды:\n/services - Наши услуги\n/help - Помощь\n\nДля записи используйте бота напрямую (реализовано в bot/index.js)",
         "additionalFields": {}
       },
-      "id": "send-welcome",
       "name": "Send Welcome",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
-      "position": [1250, 100],
-      "credentials": {
-        "telegramApi": {
-          "id": "1",
-          "name": "Telegram Bot API"
-        }
-      }
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        100
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO clients (telegram_id, username, first_name, last_name) VALUES ({{ $json.message.from.id }}, '{{ $json.message.from.username }}', '{{ $json.message.from.first_name }}', '{{ $json.message.from.last_name }}') ON CONFLICT (telegram_id) DO NOTHING",
-        "additionalFields": {}
+        "query": "=SELECT * FROM services WHERE is_active = true ORDER BY id",
+        "options": {}
       },
-      "id": "create-user",
-      "name": "Create User",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 1,
-      "position": [850, 400],
-      "credentials": {
-        "postgres": {
-          "id": "2",
-          "name": "PostgreSQL Grooming DB"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT * FROM services WHERE is_active = true ORDER BY id",
-        "additionalFields": {}
-      },
-      "id": "get-services",
       "name": "Get Services",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 1,
-      "position": [1250, 200]
+      "typeVersion": 2.4,
+      "position": [
+        1340,
+        250
+      ]
     },
     {
       "parameters": {
-        "chatId": "={{ $json[0].message.chat.id }}",
-        "text": "📋 Наши услуги:\\n\\n{{ $json.map((s, i) => `${i + 1}. ${s.name} - ${s.price}₽ (${s.duration} мин)\\n   ${s.description}`).join('\\n\\n') }}",
+        "chatId": "={{ $('Extract Data').item.json.chatId }}",
+        "text": "=📋 Наши услуги:\n\n{{ $json.map((s, i) => `${i + 1}. ${s.name} - ${s.price}₽ (${s.duration} мин)\\n   ${s.description}`).join('\\n\\n') }}\n\nДля записи напишите @{{ $env.TELEGRAM_BOT_USERNAME }} или используйте команду /book",
         "additionalFields": {}
       },
-      "id": "send-services",
       "name": "Send Services",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
-      "position": [1450, 200],
-      "credentials": {
-        "telegramApi": {
-          "id": "1",
-          "name": "Telegram Bot API"
-        }
-      }
+      "typeVersion": 1.2,
+      "position": [
+        1560,
+        250
+      ]
     },
     {
       "parameters": {
-        "chatId": "={{ $json.message.chat.id }}",
-        "text": "ℹ️ Помощь:\\n\\n/start - Начало работы\\n/book - Записаться на процедуру\\n/services - Список услуг\\n/addpet - Добавить питомца\\n/myappointments - Мои записи\\n/cancel - Отменить запись\\n\\nПо всем вопросам обращайтесь:\\n📞 {{ $env.SALON_PHONE }}",
+        "chatId": "={{ $json.chatId }}",
+        "text": "=ℹ️ Помощь:\n\n/start - Начало работы\n/services - Список услуг\n\nКонтакты:\n📞 Телефон: {{ $env.SALON_PHONE || '+7 (999) 123-45-67' }}\n📍 Адрес: {{ $env.SALON_ADDRESS || 'см. описание бота' }}\n\n⏰ Рабочие часы: {{ $env.WORKING_HOURS_START || '09:00' }} - {{ $env.WORKING_HOURS_END || '19:00' }}",
         "additionalFields": {}
       },
-      "id": "send-help",
       "name": "Send Help",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
-      "position": [1250, 500],
-      "credentials": {
-        "telegramApi": {
-          "id": "1",
-          "name": "Telegram Bot API"
-        }
-      }
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        400
+      ]
     }
   ],
   "connections": {
     "Telegram Trigger": {
-      "main": [[{ "node": "Check User Exists", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Check User Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Check User Exists": {
-      "main": [[{ "node": "Is New User?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Is New User?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Is New User?": {
       "main": [
-        [{ "node": "Create User", "type": "main", "index": 0 }],
-        [{ "node": "Extract Command", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Create User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Create User": {
-      "main": [[{ "node": "Extract Command", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Extract Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Extract Command": {
-      "main": [[{ "node": "Route Command", "type": "main", "index": 0 }]]
+    "Extract Data": {
+      "main": [
+        [
+          {
+            "node": "Route Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Route Command": {
       "main": [
-        [{ "node": "Send Welcome", "type": "main", "index": 0 }],
-        [],
-        [{ "node": "Get Services", "type": "main", "index": 0 }],
-        [],
-        [],
-        [{ "node": "Send Help", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Send Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Services",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Get Services": {
-      "main": [[{ "node": "Send Services", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Send Services",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
+  "pinData": {},
   "settings": {
-    "timezone": "Europe/Moscow"
+    "executionOrder": "v1"
   },
   "staticData": null,
   "tags": [],
-  "triggerCount": 1,
-  "updatedAt": "2025-01-01T00:00:00.000Z",
-  "versionId": "1"
+  "triggerCount": 0,
+  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "versionId": ""
 }

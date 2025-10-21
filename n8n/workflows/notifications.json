@@ -1,0 +1,237 @@
+{
+  "name": "Notifications - Appointment Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Schedule Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT \n  a.id,\n  a.appointment_date,\n  a.appointment_time,\n  a.reminder_sent,\n  c.telegram_id,\n  c.first_name,\n  p.name as pet_name,\n  s.name as service_name,\n  s.price,\n  s.duration\nFROM appointments a\nJOIN clients c ON a.client_id = c.id\nJOIN pets p ON a.pet_id = p.id\nJOIN services s ON a.service_id = s.id\nWHERE \n  a.status = 'scheduled'\n  AND a.reminder_sent = false\n  AND a.appointment_date = CURRENT_DATE + INTERVAL '1 day'\n  AND a.appointment_time >= '{{ $now.format('HH:mm') }}'\n  AND a.appointment_time <= '{{ $now.plus({hours: 1}).format('HH:mm') }}'",
+        "options": {}
+      },
+      "name": "Find Appointments for Reminder",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "largerThan"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Appointments?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "message",
+              "value": "=🔔 Напоминание о записи!\n\n👤 {{ $json.first_name }}, напоминаем о визите завтра:\n\n📅 Дата: {{ $json.appointment_date.toFormat('dd.MM.yyyy') }}\n🕐 Время: {{ $json.appointment_time }}\n🐾 Питомец: {{ $json.pet_name }}\n✂️ Услуга: {{ $json.service_name }}\n⏱️ Длительность: {{ $json.duration }} мин\n💰 Стоимость: {{ $json.price }} ₽\n\n📍 Адрес: {{ $env.SALON_ADDRESS }}\n📞 Телефон: {{ $env.SALON_PHONE }}\n\nБудем рады вас видеть!",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "chatId",
+              "value": "={{ $json.telegram_id }}",
+              "type": "number"
+            },
+            {
+              "id": "3",
+              "name": "appointmentId",
+              "value": "={{ $json.id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Prepare Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "name": "Send Reminder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=UPDATE appointments \nSET reminder_sent = true \nWHERE id = {{ $json.appointmentId }}",
+        "options": {}
+      },
+      "name": "Mark Reminder Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "notifications",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "appointment_id": "={{ $json.appointmentId }}",
+            "client_id": "={{ $('Find Appointments for Reminder').item.json.client_id }}",
+            "type": "reminder",
+            "message": "={{ $json.message }}",
+            "status": "sent"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "name": "Log Notification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1340,
+        450
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Find Appointments for Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Appointments for Reminder": {
+      "main": [
+        [
+          {
+            "node": "Has Appointments?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Appointments?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Message": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder": {
+      "main": [
+        [
+          {
+            "node": "Mark Reminder Sent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "versionId": ""
+}

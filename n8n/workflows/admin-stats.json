@@ -1,0 +1,176 @@
+{
+  "name": "Admin - Daily Statistics",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 20 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Daily at 20:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT \n  (SELECT COUNT(*) FROM clients) as total_clients,\n  (SELECT COUNT(*) FROM pets) as total_pets,\n  (SELECT COUNT(*) FROM appointments WHERE status = 'scheduled' AND appointment_date >= CURRENT_DATE) as upcoming_appointments,\n  (SELECT COUNT(*) FROM appointments WHERE status = 'completed' AND appointment_date = CURRENT_DATE) as today_completed,\n  (SELECT COUNT(*) FROM appointments WHERE appointment_date = CURRENT_DATE + 1 AND status = 'scheduled') as tomorrow_scheduled,\n  (SELECT COALESCE(SUM(s.price), 0) FROM appointments a JOIN services s ON a.service_id = s.id WHERE a.status = 'completed' AND a.appointment_date >= DATE_TRUNC('month', CURRENT_DATE)) as month_revenue",
+        "options": {}
+      },
+      "name": "Get Statistics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT \n  a.appointment_date,\n  a.appointment_time,\n  c.first_name || ' ' || COALESCE(c.last_name, '') as client_name,\n  c.phone,\n  p.name as pet_name,\n  s.name as service_name\nFROM appointments a\nJOIN clients c ON a.client_id = c.id\nJOIN pets p ON a.pet_id = p.id\nJOIN services s ON a.service_id = s.id\nWHERE a.appointment_date = CURRENT_DATE + 1\n  AND a.status = 'scheduled'\nORDER BY a.appointment_time",
+        "options": {}
+      },
+      "name": "Get Tomorrow Appointments",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        460,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "stats",
+              "value": "={{ $('Get Statistics').item.json }}",
+              "type": "object"
+            },
+            {
+              "id": "2",
+              "name": "appointments",
+              "value": "={{ $json }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "message",
+              "value": "=📊 Ежедневная статистика\n\n👥 Всего клиентов: {{ $json.stats.total_clients }}\n🐾 Всего питомцев: {{ $json.stats.total_pets }}\n📅 Предстоящих записей: {{ $json.stats.upcoming_appointments }}\n✅ Выполнено сегодня: {{ $json.stats.today_completed }}\n💰 Доход за месяц: {{ $json.stats.month_revenue }} ₽\n\n📆 Записи на завтра ({{ $json.stats.tomorrow_scheduled }}):\n{{ $json.appointments.length > 0 ? $json.appointments.map((apt, i) => `${i + 1}. ${apt.appointment_time} - ${apt.client_name}\\n   🐾 ${apt.pet_name}, ${apt.service_name}\\n   📞 ${apt.phone}`).join('\\n\\n') : 'Записей нет' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Format Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_ADMIN_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "name": "Send to Admin",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Daily at 20:00": {
+      "main": [
+        [
+          {
+            "node": "Get Statistics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Tomorrow Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tomorrow Appointments": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "Format Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-15T10:00:00.000Z",
+  "versionId": ""
+}
