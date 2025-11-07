@@ -1,5 +1,5 @@
 {
-  "name": "Admin - Daily Statistics",
+  "name": "Admin - Daily Statistics (Microservice)",
   "nodes": [
     {
       "parameters": {
@@ -66,7 +66,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Форматируем сообщение со статистикой\nconst data = $input.first().json;\nconst stats = data.stats;\nconst appointments = data.appointments;\n\n// Форматируем дату завтра\nconst tomorrow = new Date();\ntomorrow.setDate(tomorrow.getDate() + 1);\nconst tomorrowStr = tomorrow.toLocaleDateString('ru-RU', {\n  weekday: 'long',\n  day: '2-digit',\n  month: 'long'\n});\n\nlet message = `📊 *Ежедневная статистика*\\n\\n`;\nmessage += `👥 Всего клиентов: ${stats.total_clients}\\n`;\nmessage += `🐾 Всего питомцев: ${stats.total_pets}\\n`;\nmessage += `📅 Предстоящих записей: ${stats.upcoming_appointments}\\n`;\nmessage += `✅ Выполнено сегодня: ${stats.today_completed}\\n`;\nmessage += `💰 Доход за месяц: ${stats.month_revenue} ₽\\n\\n`;\n\nmessage += `📆 *Записи на завтра (${tomorrowStr})*\\n`;\nmessage += `_Всего: ${stats.tomorrow_scheduled}_\\n\\n`;\n\nif (appointments.length === 0) {\n  message += '✨ Записей нет';\n} else {\n  appointments.forEach((apt, index) => {\n    const clientName = apt.last_name ? \n      `${apt.first_name} ${apt.last_name}` : \n      apt.first_name;\n    \n    message += `${index + 1}. *${apt.appointment_time}* - ${clientName}\\n`;\n    message += `   🐾 ${apt.pet_name} (${apt.pet_breed})\\n`;\n    message += `   ✂️ ${apt.service_name} - ${apt.price} ₽\\n`;\n    message += `   📞 ${apt.phone}\\n\\n`;\n  });\n}\n\nreturn {\n  message: message,\n  adminId: process.env.TELEGRAM_ADMIN_ID\n};"
+        "jsCode": "// Форматируем сообщение со статистикой\nconst data = $input.first().json;\nconst stats = data.stats;\nconst appointments = data.appointments;\n\n// Форматируем дату завтра\nconst tomorrow = new Date();\ntomorrow.setDate(tomorrow.getDate() + 1);\nconst tomorrowStr = tomorrow.toLocaleDateString('ru-RU', {\n  weekday: 'long',\n  day: '2-digit',\n  month: 'long'\n});\n\nlet message = `📊 *Ежедневная статистика*\\n\\n`;\nmessage += `👥 Всего клиентов: ${stats.total_clients}\\n`;\nmessage += `🐾 Всего питомцев: ${stats.total_pets}\\n`;\nmessage += `📅 Предстоящих записей: ${stats.upcoming_appointments}\\n`;\nmessage += `✅ Выполнено сегодня: ${stats.today_completed}\\n`;\nmessage += `💰 Доход за месяц: ${stats.month_revenue} ₽\\n\\n`;\n\nmessage += `📆 *Записи на завтра (${tomorrowStr})*\\n`;\nmessage += `_Всего: ${stats.tomorrow_scheduled}_\\n\\n`;\n\nif (appointments.length === 0) {\n  message += '✨ Записей нет';\n} else {\n  appointments.forEach((apt, index) => {\n    const clientName = apt.last_name ? \n      `${apt.first_name} ${apt.last_name}` : \n      apt.first_name;\n    \n    message += `${index + 1}. *${apt.appointment_time}* - ${clientName}\\n`;\n    message += `   🐾 ${apt.pet_name} (${apt.pet_breed})\\n`;\n    message += `   ✂️ ${apt.service_name} - ${apt.price} ₽\\n`;\n    message += `   📞 ${apt.phone}\\n\\n`;\n  });\n}\n\nreturn {\n  message: message,\n  adminId: process.env.TELEGRAM_ADMIN_ID,\n  parseMode: 'Markdown'\n};"
       },
       "id": "format-message-id-005",
       "name": "Format Statistics Message",
@@ -79,16 +79,26 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $json.adminId }}",
-        "text": "={{ $json.message }}",
-        "additionalFields": {
-          "parse_mode": "Markdown"
+        "method": "POST",
+        "url": "={{ $env.BOT_SERVICE_URL || 'http://bot-service:3000' }}/send-message",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chatId\": {{ $json.adminId }},\n  \"text\": {{ JSON.stringify($json.message) }},\n  \"parseMode\": \"{{ $json.parseMode }}\"\n}",
+        "options": {
+          "timeout": 10000,
+          "retry": {
+            "enabled": true,
+            "maxRetries": 3,
+            "retryInterval": 2000
+          }
         }
       },
       "id": "send-to-admin-id-006",
-      "name": "Send to Admin",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "name": "Send to Admin via Bot Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1120,
         300
@@ -149,7 +159,7 @@
       "main": [
         [
           {
-            "node": "Send to Admin",
+            "node": "Send to Admin via Bot Service",
             "type": "main",
             "index": 0
           }
@@ -162,8 +172,8 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": [],
+  "tags": ["microservice", "http-api", "admin", "statistics", "scheduled"],
   "triggerCount": 0,
-  "updatedAt": "2024-01-15T12:00:00.000Z",
+  "updatedAt": "2025-01-15T12:00:00.000Z",
   "versionId": ""
 }

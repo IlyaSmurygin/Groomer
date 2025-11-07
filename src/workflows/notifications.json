@@ -1,5 +1,5 @@
 {
-  "name": "Notifications - Appointment Reminders",
+  "name": "Notifications - Appointment Reminders (Microservice)",
   "nodes": [
     {
       "parameters": {
@@ -70,7 +70,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Форматируем сообщение-напоминание\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // Форматируем дату\n  const date = new Date(data.appointment_date);\n  const dateStr = date.toLocaleDateString('ru-RU', {\n    day: '2-digit',\n    month: '2-digit',\n    year: 'numeric'\n  });\n  \n  // Формируем сообщение\n  const clientName = data.last_name ? \n    `${data.first_name} ${data.last_name}` : \n    data.first_name;\n  \n  const message = `🔔 Напоминание о записи!\n\n👤 ${clientName}, напоминаем о визите завтра:\n\n📅 Дата: ${dateStr}\n🕐 Время: ${data.appointment_time}\n🐾 Питомец: ${data.pet_name} (${data.pet_breed})\n✂️ Услуга: ${data.service_name}\n⏱️ Длительность: ${data.duration} мин\n💰 Стоимость: ${data.price} ₽\n\n📍 Адрес: ${process.env.SALON_ADDRESS || 'уточняйте при звонке'}\n📞 Телефон: ${process.env.SALON_PHONE || '+7 (999) 123-45-67'}\n\nБудем рады вас видеть! 🐕🐈`;\n  \n  results.push({\n    chatId: data.telegram_id,\n    message: message,\n    appointmentId: data.appointment_id,\n    clientId: data.client_id\n  });\n}\n\nreturn results;"
+        "jsCode": "// Форматируем сообщение-напоминание\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // Форматируем дату\n  const date = new Date(data.appointment_date);\n  const dateStr = date.toLocaleDateString('ru-RU', {\n    day: '2-digit',\n    month: '2-digit',\n    year: 'numeric'\n  });\n  \n  // Формируем сообщение\n  const clientName = data.last_name ? \n    `${data.first_name} ${data.last_name}` : \n    data.first_name;\n  \n  const message = `🔔 Напоминание о записи!\n\n👤 ${clientName}, напоминаем о визите завтра:\n\n📅 Дата: ${dateStr}\n🕐 Время: ${data.appointment_time}\n🐾 Питомец: ${data.pet_name} (${data.pet_breed})\n✂️ Услуга: ${data.service_name}\n⏱️ Длительность: ${data.duration} мин\n💰 Стоимость: ${data.price} ₽\n\n📍 Адрес: ${process.env.SALON_ADDRESS || 'уточняйте при звонке'}\n📞 Телефон: ${process.env.SALON_PHONE || '+7 (999) 123-45-67'}\n\nБудем рады вас видеть! 🐕🐈`;\n  \n  results.push({\n    chatId: data.telegram_id,\n    message: message,\n    appointmentId: data.appointment_id,\n    clientId: data.client_id,\n    type: 'reminder'\n  });\n}\n\nreturn results;"
       },
       "id": "prepare-messages-id-004",
       "name": "Prepare Messages",
@@ -83,14 +83,26 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $json.chatId }}",
-        "text": "={{ $json.message }}",
-        "additionalFields": {}
+        "method": "POST",
+        "url": "={{ $env.BOT_SERVICE_URL || 'http://bot-service:3000' }}/send-notification",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chatId\": {{ $json.chatId }},\n  \"text\": {{ JSON.stringify($json.message) }},\n  \"type\": \"{{ $json.type }}\"\n}",
+        "options": {
+          "timeout": 10000,
+          "retry": {
+            "enabled": true,
+            "maxRetries": 5,
+            "retryInterval": 2000
+          }
+        }
       },
       "id": "send-reminder-id-005",
-      "name": "Send Reminder",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1.2,
+      "name": "Send Reminder via Bot Service",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1120,
         300
@@ -99,7 +111,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=UPDATE appointments \nSET reminder_sent = true \nWHERE id = {{ $json.appointmentId }}",
+        "query": "=UPDATE appointments \nSET reminder_sent = true,\n    updated_at = CURRENT_TIMESTAMP\nWHERE id = {{ $json.appointmentId }}",
         "options": {}
       },
       "id": "mark-sent-id-006",
@@ -129,11 +141,12 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "appointment_id": "={{ $json.appointmentId }}",
-            "client_id": "={{ $json.clientId }}",
+            "appointment_id": "={{ $('Prepare Messages').item.json.appointmentId }}",
+            "client_id": "={{ $('Prepare Messages').item.json.clientId }}",
             "type": "reminder",
-            "message": "={{ $json.message }}",
-            "status": "sent"
+            "message": "={{ $('Prepare Messages').item.json.message }}",
+            "status": "sent",
+            "sent_at": "={{ $now.toISO() }}"
           },
           "matchingColumns": [],
           "schema": []
@@ -188,14 +201,14 @@
       "main": [
         [
           {
-            "node": "Send Reminder",
+            "node": "Send Reminder via Bot Service",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Reminder": {
+    "Send Reminder via Bot Service": {
       "main": [
         [
           {
@@ -217,8 +230,8 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": [],
+  "tags": ["microservice", "http-api", "notifications", "scheduled"],
   "triggerCount": 0,
-  "updatedAt": "2024-01-15T12:00:00.000Z",
+  "updatedAt": "2025-01-15T12:00:00.000Z",
   "versionId": ""
 }
